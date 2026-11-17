@@ -33,6 +33,7 @@ h1,h2,.potv,.code,.logo{font-family:"Rozha One",Georgia,serif;font-weight:400}
 .mut{color:var(--mut)}
 #conn{position:fixed;top:0;left:0;right:0;z-index:50;text-align:center;font-size:13px;background:var(--gold);color:var(--goldink);padding:calc(3px + env(safe-area-inset-top)) 8px 3px;display:none}
 #conn.on{display:block}
+.cx{margin-left:8px;border:1px solid currentColor;background:none;color:inherit;border-radius:8px;padding:1px 10px;font-weight:700;cursor:pointer}
 #toast{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:60;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88vw;text-align:center}
 #toast.on{opacity:1}
 
@@ -92,6 +93,12 @@ h1,h2,.potv,.code,.logo{font-family:"Rozha One",Georgia,serif;font-weight:400}
 .card.back{background:repeating-linear-gradient(45deg,#7b1e1a 0 5px,#5c130f 5px 10px);border:2px solid var(--card)}
 .card.back::after{content:"";position:absolute;inset:18%;border:1.5px solid #f2a90099;border-radius:50%}
 .card.lg{--w:84px}
+.card.md{--w:46px}
+.reveal{display:flex;flex-direction:column;gap:8px;margin:14px 0 6px;text-align:left}
+.rv{display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.rv.win{border-color:var(--win);box-shadow:0 0 0 2px var(--win)}
+.rv .cards{display:flex;gap:4px}
+.res p{margin:6px 0 0;color:var(--mut)}
 @keyframes pop{from{transform:translateY(8px) scale(.94);opacity:0}to{transform:none;opacity:1}}
 
 /* center */
@@ -170,7 +177,7 @@ function rnd(n){const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]
 function setHTML(el,h){if(el&&el._h!==h){el.innerHTML=h;el._h=h}}
 let toastT;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600)}
-function setConn(m){const c=$('#conn');c.textContent=m;c.classList.toggle('on',!!m)}
+function setConn(m){const c=$('#conn');c.innerHTML=m?esc(m)+(view?'':' <button class="cx" data-a="cancel">Cancel</button>'):'';c.classList.toggle('on',!!m)}
 
 /* ---------- prefs ---------- */
 const prefs=Object.assign({theme:'dark',sound:true,vib:true},LS.get('tp_prefs',{}));
@@ -199,13 +206,15 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[
 function evalHand(h){
   const r=h.map(c=>c.r).sort((a,b)=>b-a);
   const flush=h.every(c=>c.s===h[0].s);
-  let run=false,rv=0;
+  let run=false,rv=0,back=false;
   if(r[0]===r[1]+1&&r[1]===r[2]+1){run=true;rv=r[0]}
   else if(r[0]===14&&r[1]===3&&r[2]===2){run=true;rv=15}
+  else if(r[0]===12&&r[1]===10&&r[2]===9){run=true;rv=11.5;back=true}
   const seq=rv===15?'A 2 3':r.map(rk).join(' ');
-  if(r[0]===r[1]&&r[1]===r[2])return{k:[6,r[0]],n:'Trail of '+plural(r[0])};
-  if(run&&flush)return{k:[5,rv],n:'Pure Run ('+seq+')'};
-  if(run)return{k:[4,rv],n:'Run ('+seq+')'};
+  if(r[0]===r[1]&&r[1]===r[2])return{k:[8,r[0]],n:'Trail of '+plural(r[0])};
+  if(r[0]===5&&r[1]===3&&r[2]===2)return flush?{k:[7],n:'Raj Kapoor 2 3 5, same suit'}:{k:[5],n:'Raj Kapoor 2 3 5'};
+  if(run&&flush)return{k:[6,rv],n:(back?'Pure Backshow (':'Pure Run (')+seq+')'};
+  if(run)return{k:[4,rv],n:(back?'Backshow (':'Run (')+seq+')'};
   if(flush)return{k:[3,...r],n:'Color, '+(FULL[r[0]]||r[0])+' high'};
   if(r[0]===r[1]||r[1]===r[2]){const k=r[0]===r[1]?r[2]:r[0];return{k:[2,r[1],k],n:'Pair of '+plural(r[1])}}
   return{k:[1,...r],n:(FULL[r[0]]||r[0])+' high'};
@@ -215,7 +224,12 @@ function cmp(a,b){for(let i=0;i<Math.max(a.k.length,b.k.length);i++){const d=(a.
 /* ---------- identity and state ---------- */
 const me={pid:LS.get('tp_pid',null)||uid(),name:LS.get('tp_name','')};
 LS.set('tp_pid',me.pid);
-let role=null,code='',peer=null,conn=null,conns={},G=null,view=null,screen='',retryT=null,joinTries=0,autoJoin=false,hostFresh=false,prev={},ssSeen='';
+let role=null,code='',peer=null,conn=null,conns={},G=null,view=null,screen='',retryT=null,attemptT=null,joinTries=0,autoJoin=false,hostFresh=false,prev={},ssSeen='';
+const ICE=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}];
+/* For networks that block direct connections, add a TURN server here:
+   ICE.push({urls:'turn:YOUR_HOST:3478',username:'USER',credential:'PASS'}); */
+const PEER_OPTS={config:{iceServers:ICE}};
+function resetNet(){role=null;clearTimeout(retryT);retryT=null;clearTimeout(attemptT);attemptT=null;destroyPeer();conns={};setConn('')}
 function destroyPeer(){if(peer){try{peer.destroy()}catch(e){}peer=null}conn=null}
 
 /* ---------- host: game engine ---------- */
@@ -240,7 +254,7 @@ function startRound(){
   do{d=(d+1)%n}while(!el.includes(G.players[d]));
   G.dealer=d;
   const deck=shuffle(makeDeck());
-  const R={n:++G.rn,hands:{},st:{},seen:{},blind:{},stake:S.boot,pot:0,turn:null,ss:null,ssRev:null,ssId:0,log:[],result:null};
+  const R={n:++G.rn,hands:{},st:{},seen:{},blind:{},stake:S.boot,bets:0,dealt:el.length,boot:S.boot,pot:0,turn:null,ss:null,ssRev:null,ssId:0,log:[],result:null};
   G.players.forEach(p=>{
     if(el.includes(p)){
       p.chips-=S.boot;R.pot+=S.boot;
@@ -275,7 +289,11 @@ function actionsFor(pid){
   const ns=R.stake*2,rc=seen?ns*2:ns;
   A.raise={cost:rc,ok:p.chips>=rc};
   const n=activeIds().length;
-  if(n===2)A.show={cost:Math.min(cc,p.chips)};
+  if(n===2){
+    const both=activeIds().every(id=>R.seen[id]);
+    const late=R.bets>=R.dealt;
+    A.show={cost:Math.min(cc,p.chips),ok:both&&late,why:!both?'both players must have seen their cards':(!late?'not allowed in the first round of betting':'')};
+  }
   if(n>=3&&seen){const pv=prevActive(pid);if(pv!==pid&&R.seen[pv])A.side={cost:cc,ok:p.chips>=cc,with:nmOf(pv)}}
   return A;
 }
@@ -291,18 +309,18 @@ function doAct(pid,a){
   const A=actionsFor(pid),seen=R.seen[pid];
   if(a==='pack'){packOut(pid);return}
   if(a==='chaal'&&A.chaal&&A.chaal.ok){
-    pay(p,A.chaal.cost);if(!seen)R.blind[pid]++;
+    pay(p,A.chaal.cost);R.bets++;if(!seen)R.blind[pid]++;
     say(p.name+(seen?' chaal ':' blind chaal ')+fmt(A.chaal.cost));afterBet();return;
   }
   if(a==='raise'&&A.raise&&A.raise.ok){
-    R.stake*=2;pay(p,A.raise.cost);if(!seen)R.blind[pid]++;
+    R.stake*=2;pay(p,A.raise.cost);R.bets++;if(!seen)R.blind[pid]++;
     say(p.name+(seen?' raised ':' blind raised ')+'to '+fmt(R.stake)+' ('+fmt(A.raise.cost)+')');afterBet();return;
   }
-  if(a==='show'&&A.show){
+  if(a==='show'&&A.show&&A.show.ok){
     pay(p,A.show.cost);say(p.name+' asked for a show ('+fmt(A.show.cost)+')');showdown('Show');return;
   }
   if(a==='side'&&A.side&&A.side.ok){
-    pay(p,A.side.cost);R.ss={from:pid,to:prevActive(pid)};
+    pay(p,A.side.cost);R.bets++;R.ss={from:pid,to:prevActive(pid)};
     say(p.name+' asks '+nmOf(R.ss.to)+' for a side show ('+fmt(A.side.cost)+')');
     if(R.pot>=S.potLimit){R.ss=null;showdown('Pot limit reached')}
     return;
@@ -340,13 +358,17 @@ function showdown(reason){
 }
 function finish(winners,reveal,reason){
   const R=G.round;
-  const share=Math.floor(R.pot/winners.length),rem=R.pot-share*winners.length;
+  const refunds=[];
+  Object.keys(R.hands).forEach(id=>{if(evalHand(R.hands[id]).k.join()==='1,6,3,2'&&P(id)){refunds.push({id,amt:R.boot});P(id).chips+=R.boot}});
+  const potLeft=R.pot-refunds.length*R.boot;
+  const share=Math.floor(potLeft/winners.length),rem=potLeft-share*winners.length;
   winners.forEach((id,i)=>{P(id).chips+=share+(i===0?rem:0)});
   const hands={};
   if(reveal)activeIds().forEach(id=>{hands[id]={cards:R.hands[id],name:evalHand(R.hands[id]).n}});
-  R.result={winners,share,reveal,reason,hands,pot:R.pot};
+  R.result={winners,share,reveal,reason,hands,pot:potLeft,refunds,at:Date.now()};
   G.phase='roundEnd';
-  const line='Round '+R.n+': '+winners.map(nmOf).join(' and ')+' won '+fmt(R.pot)+(reveal?' with '+hands[winners[0]].name:'');
+  refunds.forEach(f=>say(nmOf(f.id)+' held 2 3 6, the lowest hand, and got the boot back ('+fmt(f.amt)+')'));
+  const line='Round '+R.n+': '+winners.map(nmOf).join(' and ')+' won '+fmt(potLeft)+(reveal?' with '+hands[winners[0]].name:'');
   say(line);G.history.push(line);if(G.history.length>40)G.history.shift();
 }
 function hostCtl(c,d){
@@ -395,6 +417,7 @@ function makeView(pid){
 function broadcast(){
   if(role!=='host'||!G)return;
   LS.set('tp_G',G);
+  LS.set('tp_session',{role:'host',code:G.code,name:me.name,at:Date.now()});
   G.players.forEach(p=>{
     if(p.id===me.pid)view=makeView(p.id);
     else{const c=conns[p.id];if(c&&c.open){try{c.send({t:'state',s:makeView(p.id)})}catch(e){}}}
@@ -412,11 +435,11 @@ function hostStart(resume){
 function openHostPeer(tries){
   destroyPeer();
   setConn('Opening room...');
-  const pr=new Peer('tpatti-'+code);
+  const pr=new Peer('tpatti-'+code,PEER_OPTS);
   peer=pr;
   pr.on('open',()=>{
     setConn('');hostFresh=false;
-    LS.set('tp_session',{role:'host',code,name:me.name});
+    LS.set('tp_session',{role:'host',code,name:me.name,at:Date.now()});
     broadcast();
   });
   pr.on('connection',c=>{
@@ -466,14 +489,19 @@ function clientStart(c,auto){
 function openClientPeer(){
   destroyPeer();
   setConn(view?'Reconnecting...':'Joining room...');
-  const pr=new Peer();peer=pr;
+  const pr=new Peer(undefined,PEER_OPTS);peer=pr;
+  clearTimeout(attemptT);
+  attemptT=setTimeout(()=>{
+    if(role!=='client'||peer!==pr)return;
+    if(view&&conn&&conn.open)return;
+    scheduleRetry(true);
+  },12000);
   pr.on('open',()=>{
     const cn=pr.connect('tpatti-'+code,{reliable:true});
     conn=cn;
     cn.on('open',()=>{
-      setConn('');joinTries=0;
+      setConn('');
       cn.send({t:'join',pid:me.pid,name:me.name});
-      LS.set('tp_session',{role:'client',code,name:me.name});
     });
     cn.on('data',onClientData);
     cn.on('close',()=>{if(conn===cn)scheduleRetry()});
@@ -481,23 +509,23 @@ function openClientPeer(){
   });
   pr.on('error',e=>{
     if(peer!==pr)return;
-    if(e.type==='peer-unavailable'){
-      if(!view){
-        joinTries++;
-        if(joinTries>(autoJoin?15:0)){toast('Room not found. Check the code.');leave(true)}
-        else scheduleRetry();
-      }else scheduleRetry();
-    }else scheduleRetry();
+    if(e.type==='peer-unavailable'&&!view&&!autoJoin){toast('Room not found. Check the code.');leave();return}
+    scheduleRetry();
   });
 }
-function scheduleRetry(){
-  if(role!=='client'||retryT)return;
+function scheduleRetry(now){
+  if(role!=='client'||(retryT&&!now))return;
+  if(!view){
+    joinTries++;
+    if(joinTries>(autoJoin?10:2)){toast(autoJoin?'The previous room is gone.':'Could not connect. Check the code or try a different network.');leave();return}
+  }
   setConn(view?'Reconnecting...':'Joining room...');
-  retryT=setTimeout(()=>{retryT=null;if(role==='client')openClientPeer()},2000);
+  clearTimeout(retryT);
+  retryT=setTimeout(()=>{retryT=null;if(role==='client')openClientPeer()},now?0:2000);
 }
 function onClientData(m){
   if(!m)return;
-  if(m.t==='state'){view=m.s;onView()}
+  if(m.t==='state'){clearTimeout(attemptT);joinTries=0;view=m.s;LS.set('tp_session',{role:'client',code,name:me.name,at:Date.now()});onView()}
   else if(m.t==='full'){toast('This room is full');leave(true)}
   else if(m.t==='kick'){toast('The host removed you');leave(true)}
   else if(m.t==='closed'){toast('The host closed the room');leave(true)}
@@ -511,7 +539,7 @@ function leave(silent){
   if(role==='host'){Object.values(conns).forEach(c=>{try{c.send({t:'closed'})}catch(e){}})}
   const wasHost=role==='host';
   role=null;view=null;G=null;conns={};prev={};
-  clearTimeout(retryT);retryT=null;
+  clearTimeout(retryT);retryT=null;clearTimeout(attemptT);attemptT=null;
   LS.del('tp_session');LS.del('tp_G');
   setTimeout(destroyPeer,wasHost?300:0);
   setConn('');closeSheet();showHome();
@@ -575,6 +603,7 @@ function render(){
     setHTML($('#mine'),mineH());
   }
   setHTML($('#dock'),dockH());
+  if(view.phase==='roundEnd'&&view.me===view.hostPid&&lockLeft()>0&&!lockT){lockT=setTimeout(()=>{lockT=null;if(view)render()},500)}
 }
 function hdrH(){
   return'<div><span class="code">'+view.code+'</span>'+(view.round&&view.phase!=='lobby'?' <span class="mut">round '+view.round.n+'</span>':'')+'</div>'+
@@ -609,11 +638,21 @@ function seatH(p){
   '<div class="cards">'+cards+'</div>'+(rv?'<div class="hn">'+esc(rv.name)+'</div>':'')+
   (!p.connected?'<span class="off">offline</span>':'')+'</div>';
 }
+const REVEAL_MS=10000;
+let lockT=null;
+function lockLeft(){
+  const r=view&&view.round&&view.round.result;
+  if(!r||!r.reveal||!r.at)return 0;
+  return Math.max(0,Math.ceil((r.at+REVEAL_MS-Date.now())/1000));
+}
 function centerH(){
   const R=view.round,S=view.settings;
   if(view.phase==='roundEnd'&&R.result){
     const r=R.result;
-    return'<div class="center res"><h2>'+esc(r.winners.map(nameOf).join(' and '))+' won '+fmt(r.share)+(r.winners.length>1?' each':'')+'</h2><p>'+esc(r.reason)+'</p></div>';
+    const ids=Object.keys(r.hands||{}).sort((a,b)=>(r.winners.includes(b)?1:0)-(r.winners.includes(a)?1:0));
+    const rv=ids.map(id=>{const x=r.hands[id];return'<div class="rv'+(r.winners.includes(id)?' win':'')+'"><div class="cards">'+x.cards.map(c=>cardH(c,'md')).join('')+'</div><div><b>'+esc(nameOf(id))+'</b><br><span class="mut">'+esc(x.name)+'</span></div></div>'}).join('');
+    const rf=(r.refunds||[]).map(f=>'<p>'+esc(nameOf(f.id))+' held 2 3 6, the lowest hand, and got the boot back ('+fmt(f.amt)+').</p>').join('');
+    return'<div class="center res"><h2>'+esc(r.winners.map(nameOf).join(' and '))+' won '+fmt(r.share)+(r.winners.length>1?' each':'')+'</h2><p>'+esc(r.reason)+'</p>'+(rv?'<div class="reveal">'+rv+'</div>':'')+rf+'</div>';
   }
   const last=R.log.length?R.log[R.log.length-1]:'';
   return'<div class="center"><div class="potv">'+fmt(R.pot)+'</div><div class="potl">pot</div>'+
@@ -639,9 +678,10 @@ function dockH(){
   }
   if(view.phase==='roundEnd'){
     const can=view.players.filter(p=>p.connected&&p.chips>=view.settings.boot).length>=2;
+    const lk=host?lockLeft():0;
     if(!host)return'<div class="note">'+(can?'Waiting for the host to deal the next round':'Not enough players with chips left')+'</div>';
     return can
-      ?'<button class="btn primary wide" data-a="start">Next round</button><button class="btn" data-a="settings">Settings</button><button class="btn" data-a="reset">Reset chips</button>'
+      ?'<button class="btn primary wide" data-a="start" '+(lk?'disabled':'')+'>Next round'+(lk?' ('+lk+')':'')+'</button><button class="btn" data-a="settings">Settings</button><button class="btn" data-a="reset">Reset chips</button>'
       :'<div class="note">Not enough players with chips left. Reset chips to play on.</div><button class="btn primary wide" data-a="reset">Reset chips</button>';
   }
   const meP=view.players.find(p=>p.id===view.me);
@@ -652,8 +692,9 @@ function dockH(){
     h+='<button class="btn primary" data-a="chaal" '+(A.chaal.ok?'':'disabled')+'>Chaal '+fmt(A.chaal.cost)+'</button>';
     h+='<button class="btn" data-a="raise" '+(A.raise.ok?'':'disabled')+'>Raise '+fmt(A.raise.cost)+'</button>';
     if(A.side)h+='<button class="btn" data-a="side" '+(A.side.ok?'':'disabled')+'>Side show '+fmt(A.side.cost)+'</button>';
-    if(A.show)h+='<button class="btn" data-a="show">Show '+fmt(A.show.cost)+'</button>';
+    if(A.show)h+='<button class="btn" data-a="show" '+(A.show.ok?'':'disabled')+'>Show '+fmt(A.show.cost)+'</button>';
     h+='<button class="btn danger" data-a="pack">Pack</button>';
+    if(A.show&&!A.show.ok)h+='<div class="note">Show is locked: '+A.show.why+'.</div>';
     return h;
   }
   if(A.see)h+='<button class="btn wide" data-a="see">See cards</button>';
@@ -681,17 +722,21 @@ function ssHTML(){
 function rulesH(){
   return'<h2>Hand ranking</h2><ol class="rank">'+
   '<li><b>Trail</b>, three of a kind. AAA is highest.</li>'+
+  '<li><b>Raj Kapoor</b>, 2 3 5 of one suit. Beats every Pure Run.</li>'+
   '<li><b>Pure Run</b>, three in a row of one suit.</li>'+
+  '<li><b>Raj Kapoor</b>, 2 3 5 of mixed suits. Beats every Run.</li>'+
   '<li><b>Run</b>, three in a row of mixed suits.</li>'+
   '<li><b>Color</b>, three cards of one suit.</li>'+
   '<li><b>Pair</b>, two cards of one rank.</li>'+
   '<li><b>High Card</b>, none of the above.</li></ol>'+
   '<p class="mut" style="margin:0">Runs rank A 2 3 highest, then A K Q, down to 4 3 2. Equal hands split the pot.</p>'+
+  '<p class="mut" style="margin:0"><b>Backshow</b>, 9 10 Q, counts as a run that beats 9 10 J and everything below it, and loses to 10 J Q and above. Of one suit it ranks the same way among Pure Runs, so it also beats every mixed Run.</p>'+
+  '<p class="mut" style="margin:0">A player dealt 2 3 6 of mixed suits, the lowest possible hand, gets the boot back.</p>'+
   '<h2>Betting</h2><ol class="rank">'+
   '<li><b>Blind</b> players have not looked and pay the stake. <b>Seen</b> players pay double.</li>'+
   '<li><b>Chaal</b> pays the cost and passes the turn. <b>Raise</b> doubles the stake.</li>'+
   '<li><b>Pack</b> folds your hand.</li>'+
-  '<li><b>Show</b> with 2 players left reveals both hands. Higher hand wins.</li>'+
+  '<li><b>Show</b> needs exactly 2 players left, both seen, and one full round of betting first. Both hands are revealed and the higher hand wins.</li>'+
   '<li><b>Side show</b> asks the previous seen player to compare privately. The lower hand packs. A tie packs the asker.</li>'+
   '<li>When the pot reaches the limit, all remaining hands are revealed.</li></ol>'+
   '<button class="btn primary" data-a="close">Close</button>';
@@ -738,12 +783,12 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('[data-a]');if(!b)return;
   const a=b.dataset.a;
   switch(a){
-    case'create':if(readName())hostStart(null);break;
+    case'create':if(readName()){resetNet();hostStart(null)}break;
     case'join':{
       if(!readName())break;
       const c=($('#cd').value||'').trim().toUpperCase();
       if(c.length!==5){toast('Enter the 5 character room code');break}
-      clientStart(c,false);break;
+      resetNet();clientStart(c,false);break;
     }
     case'see':case'chaal':case'raise':case'pack':case'show':case'side':case'ss_accept':case'ss_decline':act(a);break;
     case'start':hostCtl('start');break;
@@ -764,13 +809,15 @@ document.addEventListener('click',e=>{
     case'vib':prefs.vib=!prefs.vib;savePrefs();openSheet(menuH());vib(60);break;
     case'leave':if(confirm(role==='host'?'Close the room for everyone?':'Leave this room?'))leave();break;
     case'close':closeSheet();break;
+    case'cancel':leave();break;
   }
 });
 
 /* ---------- boot ---------- */
 showHome();
 (function init(){
-  const s=LS.get('tp_session',null);
+  let s=LS.get('tp_session',null);
+  if(s&&!(s.at&&Date.now()-s.at<3*3600*1000)){LS.del('tp_session');LS.del('tp_G');s=null}
   if(s&&s.role==='host'){
     const saved=LS.get('tp_G',null);
     if(saved&&saved.hostPid===me.pid){me.name=s.name||me.name;hostStart(saved);return}
