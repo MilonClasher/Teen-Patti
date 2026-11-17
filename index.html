@@ -597,7 +597,7 @@ function render(){
     setHTML($('#mine'),mineH());
   }
   setHTML($('#dock'),dockH());
-  if(view.phase==='roundEnd'&&view.me===view.hostPid&&lockLeft()>0&&!lockT){lockT=setTimeout(()=>{lockT=null;if(view)render()},500)}
+  if(view.phase==='roundEnd'&&view.me===view.hostPid&&lockLeft()>0&&!lockT){lockT=setTimeout(()=>{lockT=null;if(view)render()},250)}
 }
 function hdrH(){
   return'<div><span class="code">'+view.code+'</span>'+(view.round&&view.phase!=='lobby'?' <span class="mut">round '+view.round.n+'</span>':'')+'</div>'+
@@ -632,7 +632,7 @@ function seatH(p){
   '<div class="cards">'+cards+'</div>'+(rv?'<div class="hn">'+esc(rv.name)+'</div>':'')+
   (!p.connected?'<span class="off">offline</span>':'')+'</div>';
 }
-const REVEAL_MS=12000;
+const REVEAL_MS=1500;
 let lockT=null;
 function lockLeft(){
   const r=view&&view.round&&view.round.result;
