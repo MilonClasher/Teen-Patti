@@ -200,13 +200,13 @@ function evalHand(h){
   let run=false,rv=0;
   if(r[0]===r[1]+1&&r[1]===r[2]+1){run=true;rv=r[0]}
   else if(r[0]===14&&r[1]===3&&r[2]===2){run=true;rv=15}
-  else if(isBackshow){run=true;rv=11.5}
+  else if(isBackshow){run=true;rv=10.5}
   
   const seq=rv===15?'A 2 3':isBackshow?'9 10 Q':r.map(rk).join(' ');
 
   if(r[0]===r[1]&&r[1]===r[2])return{k:[8,r[0]],n:'Trail of '+plural(r[0])};
   if(is235)return flush?{k:[7.5],n:'Raj Kapoor 2 3 5, same suit'}:{k:[4.5],n:'Raj Kapoor 2 3 5'};
-  if(isBackshow)return flush?{k:[6.5,rv],n:'Pure Backshow ('+seq+')'}:{k:[4.2,rv],n:'Backshow ('+seq+')'};
+  if(isBackshow)return flush?{k:[6,11.2],n:'Pure Backshow ('+seq+')'}:{k:[4,10.2],n:'Backshow ('+seq+')'};
   if(run&&flush)return{k:[6,rv],n:'Pure Run ('+seq+')'};
   if(run)return{k:[4,rv],n:'Run ('+seq+')'};
   if(flush)return{k:[3,...r],n:'Color, '+(FULL[r[0]]||r[0])+' high'};
@@ -717,7 +717,7 @@ function rulesH(){
   '<li><b>Trail</b>, three of a kind.</li>'+
   '<li><b>2 3 5 (Raj Kapoor)</b>, same suit beats every pure run. Mixed suit beats every ordinary run.</li>'+
   '<li><b>Pure Run</b>, three in a row of one suit.</li>'+
-  '<li><b>9 10 Q (Backshow)</b>, beats every run until 10 J Q. In same suit, beats every improper run.</li>'+
+  '<li><b>9 10 Q (Backshow)</b>, beats every ordinary run up to 9-10-J. If pure, beats every impure run and pure runs up to 9-10-J.</li>'+
   '<li><b>Run</b>, three in a row of mixed suits.</li>'+
   '<li><b>Color</b>, three cards of one suit.</li>'+
   '<li><b>Pair</b>, two cards of one rank.</li>'+
